@@ -36,7 +36,7 @@ const CreateRoom=() =>
                         <VideoIcon className="w-7 h-7" />
                         <span className="text-xl font-bold tracking-tight">MeetFlow</span>
                     </Link>
-                    <Link to="/streaming" className="text-neutral-400 hover:text-white transition font-medium">
+                    <Link to="/stream" className="text-neutral-400 hover:text-white transition font-medium">
                         Dashboard
                     </Link>
                 </div>
