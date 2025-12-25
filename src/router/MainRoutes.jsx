@@ -28,7 +28,7 @@ const MainRoutes=() =>
                     <Route path='/' element={<Home />} />
                     <Route path='/create-room' element={<CreateRoom />} />
                     <Route path='/join-room' element={<JoinRoom />} />
-                    <Route path='/stream' element={<Streaming />} />
+                    <Route path='/streaming' element={<Streaming />} />
                     <Route path='/room/:roomId' element={<Room />} />
                 </Route>
             </Routes>
