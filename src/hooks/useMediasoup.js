@@ -28,6 +28,30 @@ export const useMediasoup=(roomId) =>
     const consumersRef=useRef(new Map());
 
     // Socket request helper
+    const ensureSocketConnected=useCallback(() =>
+    {
+        return new Promise((resolve) =>
+        {
+            if (socket.connected) return resolve();
+            socket.once("connect", resolve);
+            socket.connect();
+        });
+    }, []);
+    const waitForSendTransport=() =>
+        new Promise((resolve) =>
+        {
+            if (sendTransportRef.current) return resolve();
+            const interval=setInterval(() =>
+            {
+                if (sendTransportRef.current)
+                {
+                    clearInterval(interval);
+                    resolve();
+                }
+            }, 50);
+        });
+
+
     const socketRequest=useCallback((event, data={}) =>
     {
         return new Promise((resolve, reject) =>
@@ -147,7 +171,10 @@ export const useMediasoup=(roomId) =>
     // Produce media
     const produce=useCallback(async (track, options={}) =>
     {
-        if (!sendTransportRef.current) throw new Error("Send transport not ready");
+        await waitForSendTransport(); // 🔑 IMPORTANT
+
+        const transport=sendTransportRef.current;
+        if (!transport) throw new Error("Send transport not ready");
 
         const {kind}=track;
         const produceOptions={
@@ -155,36 +182,25 @@ export const useMediasoup=(roomId) =>
             appData: options.appData||{},
         };
 
-        // Add simulcast for video
         if (kind==="video"&&!options.appData?.source)
         {
             produceOptions.encodings=SIMULCAST_ENCODINGS;
-            produceOptions.codecOptions={
-                videoGoogleStartBitrate: 1000,
-            };
+            produceOptions.codecOptions={videoGoogleStartBitrate: 1000};
         }
 
-        // Add audio options
         if (kind==="audio")
         {
-            produceOptions.codecOptions={
-                opusStereo: true,
-                opusDtx: true,
-            };
+            produceOptions.codecOptions={opusStereo: true, opusDtx: true};
         }
 
-        const producer=await sendTransportRef.current.produce(produceOptions);
+        const producer=await transport.produce(produceOptions);
 
         producersRef.current.set(options.type||kind, producer);
         setProducers(new Map(producersRef.current));
 
-        producer.on("trackended", () =>
-        {
-            console.log(`🎤 Track ended: ${kind}`);
-        });
-
         return producer;
     }, []);
+
 
     // Consume producer
     const consume=useCallback(async (producerId, peerId) =>
@@ -279,24 +295,35 @@ export const useMediasoup=(roomId) =>
 
         try
         {
-            const response=await socketRequest("joinRoom", {token, roomId, userName});
+            // 🔑 ENSURE SOCKET IS CONNECTED FIRST
+            await ensureSocketConnected();
 
-            // Initialize device
+            const response=await socketRequest("joinRoom", {
+                token,
+                roomId,
+                userName,
+            });
+
             await initDevice(response.routerRtpCapabilities);
-
-            // Create transports
             await createSendTransport();
             await createRecvTransport();
 
             setConnectionState("connected");
-
             return response;
         } catch (err)
         {
             setConnectionState("failed");
             throw err;
         }
-    }, [roomId, initDevice, createSendTransport, createRecvTransport, socketRequest]);
+    }, [
+        roomId,
+        ensureSocketConnected,
+        socketRequest,
+        initDevice,
+        createSendTransport,
+        createRecvTransport,
+    ]);
+
 
     // Leave room
     const leaveRoom=useCallback(async () =>
