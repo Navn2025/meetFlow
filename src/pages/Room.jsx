@@ -557,80 +557,46 @@ const Room=() =>
     {
         const videoProducer=producersRef.current.get("video");
 
-        // If no video producer exists, we need to create one first
+        // First time: create producer
         if (!videoProducer)
         {
-            try
+            const stream=await navigator.mediaDevices.getUserMedia({
+                video: VIDEO_CONSTRAINTS[videoQuality],
+            });
+
+            const videoTrack=stream.getVideoTracks()[0];
+
+            // attach to local preview
+            if (localVideoRef.current)
             {
-                const transport=sendTransportRef.current;
-                if (!transport)
-                {
-                    console.error("Send transport not ready");
-                    return;
-                }
-
-                // Get video stream
-                const stream=await navigator.mediaDevices.getUserMedia({
-                    video: VIDEO_CONSTRAINTS[videoQuality],
-                });
-
-                // Add video track to existing local stream or create new one
-                const videoTrack=stream.getVideoTracks()[0];
-
-                if (localStream)
-                {
-                    // Add video track to existing stream
-                    localStream.addTrack(videoTrack);
-                    localVideoRef.current.srcObject=localStream;
-                } else
-                {
-                    // No existing stream, set this as local stream
-                    setLocalStream(stream);
-                    if (localVideoRef.current)
-                    {
-                        localVideoRef.current.srcObject=stream;
-                    }
-                }
-
-                // Create video producer with simulcast
-                const newVideoProducer=await transport.produce({
-                    track: videoTrack,
-                    encodings: SIMULCAST_ENCODINGS,
-                    codecOptions: {
-                        videoGoogleStartBitrate: 1000,
-                    },
-                    appData: {source: "camera"},
-                });
-
-                producersRef.current.set("video", newVideoProducer);
-                setIsCameraOn(true);
-
-                newVideoProducer.on("trackended", () =>
-                {
-                    console.log("📹 Video track ended");
-                });
-
-                console.log("✅ Video producer created:", newVideoProducer.id);
-            } catch (err)
-            {
-                console.error("❌ Failed to start camera:", err);
-                alert("Failed to access camera: "+err.message);
+                localVideoRef.current.srcObject=new MediaStream([videoTrack]);
             }
+
+            const producer=await sendTransportRef.current.produce({
+                track: videoTrack,
+                encodings: SIMULCAST_ENCODINGS,
+                appData: {source: "camera"},
+            });
+
+            producersRef.current.set("video", producer);
+            setIsCameraOn(true);
             return;
         }
-        // If producer exists, toggle pause/resume
-        if (videoProducer.paused)
+
+        // Toggle existing producer
+        if (videoProducer.track.enabled)
         {
-            await videoProducer.resume();
-            await socketRequest("resumeProducer", {producerId: videoProducer.id});
-            setIsCameraOn(true);
-        } else
-        {
-            await videoProducer.pause();
+            videoProducer.track.enabled=false;
             await socketRequest("pauseProducer", {producerId: videoProducer.id});
             setIsCameraOn(false);
+        } else
+        {
+            videoProducer.track.enabled=true;
+            await socketRequest("resumeProducer", {producerId: videoProducer.id});
+            setIsCameraOn(true);
         }
     };
+
 
     // = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = = 
     //| | | | | | | | | | | | | | | | | | | | | | |  TOGGLE MIC  | | | | | | | | | | | | | | | | | | | | | | | | | | | | 
