@@ -382,6 +382,17 @@ const Room=() =>
     // =========================================================
     // INITIALIZE ROOM
     // =========================================================
+
+    useEffect(() =>
+    {
+        socket.connect();
+
+        return () =>
+        {
+            socket.disconnect();
+        };
+    }, []);
+
     const initializeRoom=useCallback(async () =>
     {
         if (isInitializedRef.current) return;
