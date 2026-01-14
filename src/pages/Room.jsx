@@ -283,6 +283,12 @@ const Room=() =>
 
             const transport=dev.createSendTransport(params);
 
+            transport.on("icestatechange", s => console.log("[CLIENT] Send ICE:", s));
+            transport.on("dtlsstatechange", s => console.log("[CLIENT] Send DTLS:", s));
+
+
+            console.log(transport)
+
             transport.on("connect", async ({dtlsParameters}, callback, errback) =>
             {
                 try
@@ -308,6 +314,7 @@ const Room=() =>
                         rtpParameters,
                         appData,
                     });
+                    console.log(response)
                     callback({id: response.id});
                 } catch (err)
                 {
@@ -317,12 +324,15 @@ const Room=() =>
 
             transport.on("connectionstatechange", (state) =>
             {
-                console.log(`📡 Send transport state: ${state}`);
+                console.log("Send transport:", state);
+                if (state==="closed") return;
                 if (state==="failed")
                 {
-                    transport.close();
+                    console.error("Transport failed permanently");
+                    setConnectionState("failed");
                 }
             });
+
 
             sendTransportRef.current=transport;
             console.log("✅ Send transport created");
@@ -344,6 +354,10 @@ const Room=() =>
             const params=await socketRequest("createTransport", {roomId, type: "recv"});
 
             const transport=dev.createRecvTransport(params);
+
+            transport.on("icestatechange", s => console.log("[CLIENT] Recv ICE:", s));
+            transport.on("dtlsstatechange", s => console.log("[CLIENT] Recv DTLS:", s));
+
 
             transport.on("connect", async ({dtlsParameters}, callback, errback) =>
             {
